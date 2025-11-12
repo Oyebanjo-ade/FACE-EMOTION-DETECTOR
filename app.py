@@ -38,18 +38,24 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    name = request.form["name"]
-    file = request.files["image"]
+    name = request.form.get("name", "")
+    file = request.files.get("image")
 
-    if not file:
+    if not file or file.filename == "":
         return "No file uploaded!", 400
 
+    # Secure filename and save original file
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(filepath)
 
-    # Process image
-    img = cv2.imread(filepath)
+    # --- NEW IMAGE HANDLING ---
+    # Read uploaded file in memory and decode with OpenCV
+    in_memory_file = file.read()
+    img = cv2.imdecode(np.frombuffer(in_memory_file, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return "Failed to read image. Make sure it's a valid image file.", 400
+    # ---------------------------
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
@@ -65,8 +71,8 @@ def upload():
         emotion_result = f"You look {label}. How are you feeling?"
 
         # Draw on image
-        cv2.rectangle(img, (x, y), (x+w, y+h), (0,255,255), 2)
-        cv2.putText(img, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2)
+        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 255), 2)
+        cv2.putText(img, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
 
     # Save processed image
     cv2.imwrite(filepath, img)
@@ -81,6 +87,6 @@ def upload():
     return render_template("result.html", name=name, emotion=emotion_result, image_path=filepath)
 
 if __name__ == "__main__":
-   import os
-port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
